@@ -8,7 +8,7 @@ import com.twitter.finagle.http
 import com.twitter.util.{Await, Future}
 
 import scala.concurrent.{Future => SFuture, Await => SAwait}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 import com.typesafe.config.ConfigFactory
 import slick.driver.MySQLDriver.api._
@@ -36,7 +36,7 @@ object Server extends App {
         http.Response(req.version, http.Status.Ok)
       )
   }
-  //val server = Http.serve(":8080", service)
+
   val config = ConfigFactory.load()
   val databaseConfig = config.getConfig("database")
   
@@ -49,21 +49,17 @@ object Server extends App {
 
   val helloWorldApi: Endpoint[String] = get("hello") { Ok("Hello, World!") }
   
-  //val device: Device = Device(1, "PP000000001")
   val deviceApi: Endpoint[List[Device]] = get("device") { 
       val query = sql"select id, device_id from device".as[(Int, String)]
       val f: SFuture[Vector[(Int, String)]] = db.run(query)
       var devices = List.empty[Device]
-      f onComplete {
-          case Success(rows) =>
-            for (row <- rows) {
+      val futureDevices = f.map {
+          case rows =>
+              for (row <- rows) {
                 devices = Device(row._1, row._2) :: devices
-            }
-
-          case Failure(_) =>
-              //do your staff
-            //BadRequest(throw new RuntimeException(""))
+              }
       }
+      SAwait.result(futureDevices, Duration.Inf) 
       
       Ok(devices)
   }
