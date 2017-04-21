@@ -1,7 +1,7 @@
 # Finagle with Slick example
 
 ```bash
-docker run -d -p 3306:3306 \
+docker run -d -p 3307:3306 \
   --name finagle \
   -e MYSQL_ALLOW_EMPTY_PASSWORD=yes \
   -e MYSQL_USER=finagle \
@@ -12,7 +12,7 @@ docker run -d -p 3306:3306 \
 ```
 
 ```bash
-mysql -uroot -p -h127.0.0.1 -P3306 -Dfinagle
+mysql -uroot -p -h127.0.0.1 -P3307 -Dfinagle
 ```
 
 ```SQL

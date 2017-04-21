@@ -5,7 +5,11 @@ import argonaut.Argonaut._
 import argonaut.CodecJson
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http
+import java.util.logging.Logger
+
 import com.twitter.util.{Await, Future}
+import com.twitter.finagle.stats.{JavaLoggerStatsReceiver, StatsReceiver}
+import com.twitter.finagle.tracing.{Record, TraceId}
 
 import scala.concurrent.{ExecutionContextExecutor, Await => SAwait, Future => SFuture}
 import scala.concurrent.duration._
@@ -14,9 +18,10 @@ import slick.driver.MySQLDriver.api._
 import io.finch._
 import io.finch.argonaut._
 import io.triplew.example.actor.VisitorCountActor
-
 import io.triplew.example.Models._
 import io.triplew.example.Models.profile.api._
+import zipkin.finagle.http.HttpZipkinTracer
+import com.twitter.finagle.zipkin.core.SamplingTracer
 
 case class MyHelper(id: Int, helperId: String, homeGroupName: String, firstName: String, lastName: String)
 
@@ -41,6 +46,11 @@ object Server extends App {
         http.Response(req.version, http.Status.Ok)
       )
   }
+
+  val tConfig: HttpZipkinTracer.Config = HttpZipkinTracer.Config.builder().initialSampleRate(1.0f).host("localhost:9411").build()
+  val tracer = HttpZipkinTracer.create(tConfig, new JavaLoggerStatsReceiver(Logger.getLogger(getClass.getName)))
+  tracer.setSampleRate(1.0f)
+
 
   val config = ConfigFactory.load()
   val databaseConfig = config.getConfig("database")
@@ -86,11 +96,15 @@ object Server extends App {
     }
     val myHelpers = SAwait.result(eventualHelpers, Duration.Inf)
 
+    println(tracer.getSampleRate)
+
     countActor ! 'visit
     Ok(myHelpers)
   }
 
   val userService = (helloWorldApi :+: deviceApi).toService
-  val server = Http.server.serve(":8080", userService)
+  import com.twitter.finagle.param
+  //val server = Http.server.configured(param.Tracer(tracer)).withTracer(tracer).serve(":8080", userService)
+  val server = Http.server.withTracer(tracer).serve(":8080", userService)
   Await.ready(server)
 }

@@ -27,7 +27,8 @@ lazy val mainProject = Project(
       "mysql" % "mysql-connector-java" % "5.1.28",
       "com.typesafe.akka" %% "akka-actor"  % akkaV,
       "com.typesafe.akka" %% "akka-slf4j"  % akkaV,
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "io.zipkin.finagle" % "zipkin-finagle-http_2.11" % "0.3.4"
     ),
     slick <<= slickCodeGenTask, // register manual sbt command
     sourceGenerators in Compile <+= slickCodeGenTask // register automatic code generation on every compile, remove for only manual use
@@ -38,7 +39,7 @@ lazy val slick = TaskKey[Seq[File]]("gen-tables")
 lazy val slickCodeGenTask = (sourceManaged, dependencyClasspath in Compile, runner in Compile, streams) map { (dir, cp, r, s) =>
   //val outputDir = (dir / "slick").getPath // place generated files in sbt's managed sources folder
   val outputDir = dir.getPath // place generated files in sbt's managed sources folder
-  val url = "jdbc:mysql://0.0.0.0:3306/finagle?user=root" //; INIT=mysql -uroot -h0.0.0.0 -Dfinagle < 'src/main/resources/sql/create.sql'" // connection info for a pre-populated throw-away, in-memory db for this demo, which is freshly initialized on every run
+  val url = "jdbc:mysql://0.0.0.0:3307/finagle?user=root" //; INIT=mysql -uroot -h0.0.0.0 -Dfinagle < 'src/main/resources/sql/create.sql'" // connection info for a pre-populated throw-away, in-memory db for this demo, which is freshly initialized on every run
   val jdbcDriver = "com.mysql.jdbc.Driver"
   val slickDriver = "slick.driver.MySQLDriver"
   val pkg = "io.triplew.example.models"
