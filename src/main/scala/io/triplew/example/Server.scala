@@ -15,13 +15,17 @@ import io.finch._
 import io.finch.argonaut._
 import io.triplew.example.actor.VisitorCountActor
 
-case class Helper(id: Int, helperId: String, homeGroupId: String, firstName: String, lastName: String)
+import io.triplew.example.Models._
+import io.triplew.example.Models.profile.api._
+
+case class MyHelper(id: Int, helperId: String, homeGroupId: String, firstName: String, lastName: String)
+
 
 //TODO zipkin
 //TODO onComplete
-object Helper {
-      implicit val deviceCodec: CodecJson[Helper] =
-              casecodec5(Helper.apply, Helper.unapply)("id", "helper_id", "home_group_id", "first_name", "last_name")
+object MyHelper {
+      implicit val deviceCodec: CodecJson[MyHelper] =
+              casecodec5(MyHelper.apply, MyHelper.unapply)("id", "helper_id", "home_group_id", "first_name", "last_name")
 }
 
 // refs: https://twitter.github.io/finagle/guide/Quickstart.html
@@ -40,7 +44,7 @@ object Server extends App {
 
   val config = ConfigFactory.load()
   val databaseConfig = config.getConfig("database")
-  
+
   val jdbcUrl = databaseConfig.getString("url")
   val dbUser = databaseConfig.getString("user")
   val dbPassword = databaseConfig.getString("password")
@@ -48,18 +52,29 @@ object Server extends App {
   val db = Database.forURL(jdbcUrl, driver="com.mysql.jdbc.Driver", user=dbUser, password=dbPassword)
 
   val helloWorldApi: Endpoint[String] = get("hello") { Ok("Hello, World!") }
-  
-  val deviceApi: Endpoint[List[Helper]] = get("helpers") {
+
+  val deviceApi: Endpoint[List[MyHelper]] = get("helpers") {
+    /**
+      * slick.codegen.SourceCodeGenerator を利用してデータを取得した結果を標準出力
+      */
+    val q = Helper.map{c => (c.lastName, c.firstName)}
+    SAwait.result(db.run(q.result).map { result =>
+      println(result.toString)
+    }, 60 second)
+
+    /**
+      * 下記は、本クラスで定義したクラスMyHelperの結果をjsonで返却
+      */
     val query = sql"select id, helper_id, home_group_id, first_name, last_name from helper".as[(Int, String, String, String, String)]
     val eventualVector: SFuture[Vector[(Int, String, String, String, String)]] = db.run(query.transactionally)
 
     val eventualHelpers = eventualVector.map {f =>
-      f.map{ case(id, helperId, homeGroupId, firstName, lastName) => Helper(id, helperId, homeGroupId, firstName, lastName)}.toList
+      f.map{ case(id, helperId, homeGroupId, firstName, lastName) => MyHelper(id, helperId, homeGroupId, firstName, lastName)}.toList
     }
-    val helpers = SAwait.result(eventualHelpers, Duration.Inf)
+    val myHelpers = SAwait.result(eventualHelpers, Duration.Inf)
 
     countActor ! 'visit
-    Ok(helpers)
+    Ok(myHelpers)
   }
 
   val userService = (helloWorldApi :+: deviceApi).toService
