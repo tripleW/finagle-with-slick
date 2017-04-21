@@ -1,31 +1,35 @@
 package io.triplew.example
 
+import akka.actor.{ActorSystem, Props}
 import argonaut.Argonaut._
 import argonaut.CodecJson
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http
 import com.twitter.util.{Await, Future}
 
-import scala.concurrent.{Await => SAwait, Future => SFuture}
+import scala.concurrent.{ExecutionContextExecutor, Await => SAwait, Future => SFuture}
 import scala.concurrent.duration._
 import com.typesafe.config.ConfigFactory
 import slick.driver.MySQLDriver.api._
-
 import io.finch._
 import io.finch.argonaut._
+import io.triplew.example.actor.VisitorCountActor
 
-case class Device(id: Int, deviceId: String)
+case class Helper(id: Int, helperId: String, homeGroupId: String, firstName: String, lastName: String)
 
 //TODO zipkin
 //TODO onComplete
-object Device {
-      implicit val deviceCodec: CodecJson[Device] =
-              casecodec2(Device.apply, Device.unapply)("id", "device_id")
+object Helper {
+      implicit val deviceCodec: CodecJson[Helper] =
+              casecodec5(Helper.apply, Helper.unapply)("id", "helper_id", "home_group_id", "first_name", "last_name")
 }
 
 // refs: https://twitter.github.io/finagle/guide/Quickstart.html
 object Server extends App {
-  import scala.concurrent.ExecutionContext.Implicits.global
+  implicit val system: ActorSystem  = ActorSystem("finagle-with-slick")
+  implicit val executor: ExecutionContextExecutor = system.dispatcher
+
+  val countActor = system.actorOf(Props[VisitorCountActor], "counter")
 
   val service = new Service[http.Request, http.Response] {
     def apply(req: http.Request): Future[http.Response] =
@@ -45,16 +49,17 @@ object Server extends App {
 
   val helloWorldApi: Endpoint[String] = get("hello") { Ok("Hello, World!") }
   
-  val deviceApi: Endpoint[List[Device]] = get("device") { 
-    val query = sql"select id, device_id from device".as[(Int, String)]
-    val eventualVector: SFuture[Vector[(Int, String)]] = db.run(query.transactionally)
+  val deviceApi: Endpoint[List[Helper]] = get("helpers") {
+    val query = sql"select id, helper_id, home_group_id, first_name, last_name from helper".as[(Int, String, String, String, String)]
+    val eventualVector: SFuture[Vector[(Int, String, String, String, String)]] = db.run(query.transactionally)
 
-    val futureDevices = eventualVector.map {f =>
-      f.map{ case(id, deviceId) => Device(id, deviceId)}.toList
+    val eventualHelpers = eventualVector.map {f =>
+      f.map{ case(id, helperId, homeGroupId, firstName, lastName) => Helper(id, helperId, homeGroupId, firstName, lastName)}.toList
     }
-    val devices = SAwait.result(futureDevices, Duration.Inf)
+    val helpers = SAwait.result(eventualHelpers, Duration.Inf)
 
-    Ok(devices)
+    countActor ! 'visit
+    Ok(helpers)
   }
 
   val userService = (helloWorldApi :+: deviceApi).toService
