@@ -56,10 +56,22 @@ object Server extends App {
   val deviceApi: Endpoint[List[MyHelper]] = get("helpers") {
     /**
       * slick.codegen.SourceCodeGenerator を利用してデータを取得した結果を標準出力
+      *
+      * refs: http://krrrr38.github.io/slick-doc-ja/v3.0.out/%E3%82%B9%E3%82%AD%E3%83%BC%E3%83%9E%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AE%E7%94%9F%E6%88%90.html
       */
-    val q = Helper.map{c => (c.lastName, c.firstName)}
-    SAwait.result(db.run(q.result).map { result =>
-      println(result.toString)
+    val q =
+      Helper.map{c => (
+        c.id,
+        c.helperId,
+        c.homeGroupId,
+        c.firstName.getOrElse(""),
+        c.lastName.getOrElse("")
+      )}
+
+    SAwait.result(db.run(q.result).map { rows: Seq[(Int, String, String, String, String)] =>
+      rows.foreach {row =>
+        println(row._1, row._2, row._3, row._4, row._5)
+      }
     }, 60 second)
 
     /**
