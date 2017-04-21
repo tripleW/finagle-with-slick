@@ -8,8 +8,7 @@ import com.twitter.finagle.http
 import java.util.logging.Logger
 
 import com.twitter.util.{Await, Future}
-import com.twitter.finagle.stats.{JavaLoggerStatsReceiver, StatsReceiver}
-import com.twitter.finagle.tracing.{Record, TraceId}
+import com.twitter.finagle.stats.{JavaLoggerStatsReceiver, MetricsHostStatsReceiver}
 
 import scala.concurrent.{ExecutionContextExecutor, Await => SAwait, Future => SFuture}
 import scala.concurrent.duration._
@@ -46,10 +45,6 @@ object Server extends App {
         http.Response(req.version, http.Status.Ok)
       )
   }
-
-  val tConfig: HttpZipkinTracer.Config = HttpZipkinTracer.Config.builder().initialSampleRate(1.0f).host("localhost:9411").build()
-  val tracer = HttpZipkinTracer.create(tConfig, new JavaLoggerStatsReceiver(Logger.getLogger(getClass.getName)))
-  tracer.setSampleRate(1.0f)
 
 
   val config = ConfigFactory.load()
@@ -96,15 +91,26 @@ object Server extends App {
     }
     val myHelpers = SAwait.result(eventualHelpers, Duration.Inf)
 
-    println(tracer.getSampleRate)
-
     countActor ! 'visit
     Ok(myHelpers)
   }
 
   val userService = (helloWorldApi :+: deviceApi).toService
+
+  val hostStatsReceiver = new MetricsHostStatsReceiver()
+  val tConfig: HttpZipkinTracer.Config = HttpZipkinTracer.Config.builder().initialSampleRate(1.0f).host("0.0.0.0:9411").build()
+  //val tracer = HttpZipkinTracer.create(tConfig, new JavaLoggerStatsReceiver(Logger.getLogger(getClass.getName)))
+  val tracer = HttpZipkinTracer.create(tConfig, hostStatsReceiver)
+  //val tracer = new HttpZipkinTracer()
+  tracer.setSampleRate(1.0f)
+
   import com.twitter.finagle.param
-  //val server = Http.server.configured(param.Tracer(tracer)).withTracer(tracer).serve(":8080", userService)
-  val server = Http.server.withTracer(tracer).serve(":8080", userService)
+  //System.setProperty("com.twitter.finagle.zipkin.host", "0.0.0.0:9411")
+  System.setProperty("com.twitter.finagle.zipkin.host", "0.0.0.0")
+  System.setProperty("com.twitter.finagle.zipkin.port", "9411")
+  System.setProperty("com.twitter.finagle.tracing.debugTrace", "true")
+  System.setProperty("com.twitter.finagle.zipkin.initialSampleRate", "1.0")
+  System.setProperty("tracingEnabled", "true")
+  val server = Http.server.configured(param.Tracer(tracer)).withTracer(tracer).serve(":8080", userService)
   Await.ready(server)
 }

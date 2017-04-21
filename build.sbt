@@ -28,7 +28,8 @@ lazy val mainProject = Project(
       "com.typesafe.akka" %% "akka-actor"  % akkaV,
       "com.typesafe.akka" %% "akka-slf4j"  % akkaV,
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "io.zipkin.finagle" % "zipkin-finagle-http_2.11" % "0.3.4"
+      "io.zipkin.finagle" % "zipkin-finagle-http_2.11" % "0.3.4",
+      "com.twitter" % "finagle-stats_2.11" % "6.43.0"
     ),
     slick <<= slickCodeGenTask, // register manual sbt command
     sourceGenerators in Compile <+= slickCodeGenTask // register automatic code generation on every compile, remove for only manual use
