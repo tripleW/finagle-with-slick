@@ -40,6 +40,11 @@ create table helper (
 ```
 
 ```SQL
+insert into home_group (home_group_id, name)
+values
+('1', 'Triple W Group')
+;
+
 insert into helper (helper_id, home_group_id, first_name, last_name)
 values
 ('1', '1', '吉永', 'さゆり')

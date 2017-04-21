@@ -18,14 +18,14 @@ import io.triplew.example.actor.VisitorCountActor
 import io.triplew.example.Models._
 import io.triplew.example.Models.profile.api._
 
-case class MyHelper(id: Int, helperId: String, homeGroupId: String, firstName: String, lastName: String)
+case class MyHelper(id: Int, helperId: String, homeGroupName: String, firstName: String, lastName: String)
 
 
 //TODO zipkin
 //TODO onComplete
 object MyHelper {
       implicit val deviceCodec: CodecJson[MyHelper] =
-              casecodec5(MyHelper.apply, MyHelper.unapply)("id", "helper_id", "home_group_id", "first_name", "last_name")
+              casecodec5(MyHelper.apply, MyHelper.unapply)("id", "helper_id", "home_group_name", "first_name", "last_name")
 }
 
 // refs: https://twitter.github.io/finagle/guide/Quickstart.html
@@ -60,12 +60,13 @@ object Server extends App {
       * refs: http://krrrr38.github.io/slick-doc-ja/v3.0.out/%E3%82%B9%E3%82%AD%E3%83%BC%E3%83%9E%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AE%E7%94%9F%E6%88%90.html
       */
     val q =
-      Helper.map{c => (
-        c.id,
-        c.helperId,
-        c.homeGroupId,
-        c.firstName.getOrElse(""),
-        c.lastName.getOrElse("")
+      Helper.join(HomeGroup).on(_.homeGroupId === _.homeGroupId)
+        .map{ case(h, hg) => (
+          h.id,
+          h.helperId,
+          hg.name.getOrElse(""),
+          h.firstName.getOrElse(""),
+          h.lastName.getOrElse("")
       )}
 
     SAwait.result(db.run(q.result).map { rows: Seq[(Int, String, String, String, String)] =>
