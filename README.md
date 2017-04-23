@@ -37,6 +37,22 @@ create table helper (
   primary key(id)
 )
 ;
+
+create table if not exists home_group (
+  id int not null auto_increment,
+  home_group_id     varchar(128) not null,
+  name              varchar(256),
+  last_logged_in_at datetime,
+  last_operated_at  datetime,
+  created_by_service_name    varchar(256) default 'io.triplew.example' not null,
+  created_by_service_user_id varchar(256) default '0' not null,
+  created_at datetime not null default current_timestamp,
+  updated_by_service_name    varchar(256) default 'io.triplew.example' not null,
+  updated_by_service_user_id varchar(256) default '0' not null,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  primary key(id)
+)
+;
 ```
 
 ```SQL
@@ -50,3 +66,11 @@ values
 ('1', '1', '吉永', 'さゆり')
 ;
 ```
+
+## ZipKin
+
+```bash
+docker run -d -p 9411:9411 openzipkin/zipkin
+```
+
+![Zipkin with finagle](img/zipkin_example.png "zipkin_sample")

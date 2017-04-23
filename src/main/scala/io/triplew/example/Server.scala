@@ -5,10 +5,9 @@ import argonaut.Argonaut._
 import argonaut.CodecJson
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http
-import java.util.logging.Logger
 
 import com.twitter.util.{Await, Future}
-import com.twitter.finagle.stats.{JavaLoggerStatsReceiver, MetricsHostStatsReceiver}
+import com.twitter.finagle.stats.MetricsHostStatsReceiver
 
 import scala.concurrent.{ExecutionContextExecutor, Await => SAwait, Future => SFuture}
 import scala.concurrent.duration._
@@ -20,7 +19,6 @@ import io.triplew.example.actor.VisitorCountActor
 import io.triplew.example.Models._
 import io.triplew.example.Models.profile.api._
 import zipkin.finagle.http.HttpZipkinTracer
-import com.twitter.finagle.zipkin.core.SamplingTracer
 
 case class MyHelper(id: Int, helperId: String, homeGroupName: String, firstName: String, lastName: String)
 
@@ -58,7 +56,11 @@ object Server extends App {
 
   val helloWorldApi: Endpoint[String] = get("hello") { Ok("Hello, World!") }
 
-  val deviceApi: Endpoint[List[MyHelper]] = get("helpers") {
+  val traceApi: Endpoint[String] = get("traces") {
+    Ok("traced")
+  }
+
+  val helperApi: Endpoint[List[MyHelper]] = get("helpers") {
     /**
       * slick.codegen.SourceCodeGenerator を利用してデータを取得した結果を標準出力
       *
@@ -95,22 +97,22 @@ object Server extends App {
     Ok(myHelpers)
   }
 
-  val userService = (helloWorldApi :+: deviceApi).toService
+  val userService = (helloWorldApi :+: helperApi).toService
 
   val hostStatsReceiver = new MetricsHostStatsReceiver()
   val tConfig: HttpZipkinTracer.Config = HttpZipkinTracer.Config.builder().initialSampleRate(1.0f).host("0.0.0.0:9411").build()
-  //val tracer = HttpZipkinTracer.create(tConfig, new JavaLoggerStatsReceiver(Logger.getLogger(getClass.getName)))
   val tracer = HttpZipkinTracer.create(tConfig, hostStatsReceiver)
-  //val tracer = new HttpZipkinTracer()
   tracer.setSampleRate(1.0f)
 
-  import com.twitter.finagle.param
-  //System.setProperty("com.twitter.finagle.zipkin.host", "0.0.0.0:9411")
-  System.setProperty("com.twitter.finagle.zipkin.host", "0.0.0.0")
-  System.setProperty("com.twitter.finagle.zipkin.port", "9411")
+  System.setProperty("zipkin.http.host", "0.0.0.0:9411")
   System.setProperty("com.twitter.finagle.tracing.debugTrace", "true")
   System.setProperty("com.twitter.finagle.zipkin.initialSampleRate", "1.0")
   System.setProperty("tracingEnabled", "true")
-  val server = Http.server.configured(param.Tracer(tracer)).withTracer(tracer).serve(":8080", userService)
+
+  val server =
+    Http.server
+      .withTracer(tracer)
+      .withLabel("finagle-with-slick")
+      .serve(":8080", userService)
   Await.ready(server)
 }
