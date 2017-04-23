@@ -1,13 +1,17 @@
 package io.triplew.example
 
 import akka.actor.{ActorSystem, Props}
+import akka.event.{Logging, LoggingAdapter}
 import argonaut.Argonaut._
 import argonaut.CodecJson
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http
-
+import com.twitter.finagle.http.HttpTracing
+import com.twitter.finagle.http.HttpTracing.Header
 import com.twitter.util.{Await, Future}
 import com.twitter.finagle.stats.MetricsHostStatsReceiver
+import com.twitter.finagle.tracing.SpanId
+import com.twitter.finagle.zipkin.core.Span
 
 import scala.concurrent.{ExecutionContextExecutor, Await => SAwait, Future => SFuture}
 import scala.concurrent.duration._
@@ -54,6 +58,8 @@ object Server extends App {
 
   val db = Database.forURL(jdbcUrl, driver="com.mysql.jdbc.Driver", user=dbUser, password=dbPassword)
 
+  val logger: LoggingAdapter = Logging(system, getClass)
+
   val helloWorldApi: Endpoint[String] = get("hello") { Ok("Hello, World!") }
 
   val traceApi: Endpoint[String] = get("traces") {
@@ -61,6 +67,11 @@ object Server extends App {
   }
 
   val helperApi: Endpoint[List[MyHelper]] = get("helpers") {
+    val hostStatsReceiver = new MetricsHostStatsReceiver()
+    val tConfig: HttpZipkinTracer.Config = HttpZipkinTracer.Config.builder().initialSampleRate(1.0f).host("0.0.0.0:9411").build()
+    val tracer = HttpZipkinTracer.create(tConfig, hostStatsReceiver)
+    tracer.setSampleRate(1.0f)
+
     /**
       * slick.codegen.SourceCodeGenerator を利用してデータを取得した結果を標準出力
       *
@@ -94,6 +105,19 @@ object Server extends App {
     val myHelpers = SAwait.result(eventualHelpers, Duration.Inf)
 
     countActor ! 'visit
+
+    val client =
+      Http.client
+        .withTracer(tracer)
+        .withLabel("scala-lang")
+        .newService("www.scala-lang.org:80")
+    val req = http.Request(http.Method.Get, "/")
+    req.host = "www.scala-lang.org"
+    val response: Future[http.Response] = client(req)
+    response.map {f =>
+      logger.info(f.statusCode.toString)
+    }
+
     Ok(myHelpers)
   }
 
